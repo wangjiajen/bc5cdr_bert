@@ -20,9 +20,9 @@ model = AutoModelForTokenClassification.from_pretrained('bert-base-uncased', num
 
 # 加載數據集
 dataset = load_dataset("tner/bc5cdr")
-train_dataset = dataset["train"]
-val_dataset = dataset["validation"]
-df = pd.DataFrame(train_dataset)
+train_data = dataset["train"]
+val_data = dataset["validation"]
+# df = pd.DataFrame(train_dataset)
 # print(df)
 # print(dataset)
 
@@ -46,25 +46,36 @@ class Dataset(Dataset):
 def align_labels_with_tokens(labels, word_ids):
     new_labels = []
     current_word = None
+    # print(f"labels: {labels}, word_ids: {word_ids}")
     # print(word_ids)
     # print(len(word_ids))
     # print(labels)
     # print(len(labels))
     for word_id in word_ids:
-        if word_id != current_word:
-            # Start of a new word!
-            current_word = word_id
-            label = -100 if word_id is None else labels[word_id]
-            new_labels.append(label)
-        elif word_id is None:
-            # Special token
-            new_labels.append(-100)
-        else:
-            # Same word as previous token
-            label = -100
-            new_labels.append(label)      
-    # print(new_labels)
+        
+            if word_id != current_word:
+                # Start of a new word!
+                current_word = word_id
+                label = -100 if word_id is None else labels[word_id]
+                new_labels.append(label)
+            elif word_id is None:
+                # Special token
+                new_labels.append(-100)
+            else:
+                # Same word as previous token
+                label = -100
+                new_labels.append(label)      
+        # print(new_labels)
+
+
     return new_labels
+
+
+
+
+
+
+
 
 # def split_entity(label_sequence):
 #     entity_mark = dict()
@@ -130,7 +141,7 @@ def collate_fn(batch):
     # input_ids = torch.tensor(tokenized_inputs.input_ids)
     # attention_mask = torch.tensor(tokenized_inputs.attention_mask)
     labels_input = torch.tensor(new_labels)
-    print(labels_input)
+    # print(labels_input)
     return tokenized_inputs, labels_input
 
 # def tokenize_and_align_labels(examples):
@@ -167,95 +178,86 @@ LR = 1e-6
 EPOCHS = 5 #總共要用全部的訓練樣本重複跑幾回合
 BATCH_SIZE = 8
 
-train_dataset = Dataset(train_dataset, tokenizer)
+train_dataset = Dataset(train_data,tokenizer)
 train_loader = DataLoader(train_dataset, batch_size = BATCH_SIZE, shuffle = True, collate_fn=collate_fn)
-val_dataset = Dataset(val_dataset, tokenizer)
-val_loader = DataLoader(train_dataset, batch_size = BATCH_SIZE, shuffle = True, collate_fn=collate_fn)
+val_dataset = Dataset(val_data,tokenizer)
+val_loader = DataLoader(val_dataset, batch_size = BATCH_SIZE, shuffle = True, collate_fn=collate_fn)
 
-model.train()
-
-# 定義損失函數
-criterion = torch.nn.CrossEntropyLoss()
-optimizer = Adam(model.parameters(), lr=LR)
+# Define the model, optimizer, and loss function
 model.to(device)
-# # 訓練
-def train(model, train_loader, val_loader, epochs, criterion, optimizer,save_path):
-    best_val_acc = 0.0  
-    for epoch in range(epochs):
-        # model.train()
-        total_loss_train = 0
-        total_correct_train = 0
+optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
+loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+model.train()
+# Training loop
+for epoch in range(EPOCHS):
+    model.train()
+    total_loss = 0.0
 
-        for batch in tqdm(train_loader):
-            # for t in batch["input_ids"]:
-            #     print(t)
-            # return 
-            # print("EEEEEEEEEEEEEEEEE",batch)
-            # input_ids = [t.to(device) for t in batch[0]]
-            # attention_mask = [t.to(device) for t in batch[1]]
-            # labels = [t.to(device) for t in a]           
-            data=[t.to(device) for t in batch]
-            a,labels_input=data[:]
-            input_ids=a.input_ids
-            attention_mask=a.attention_mask
-            optimizer.zero_grad()
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask,labels=labels_input)
-            # logits = outputs.logits
-            # loss = criterion(logits, labels_input)
-            loss = criterion(outputs, labels_input)
-            # loss=outputs[0]
-            loss.backward()
-            optimizer.step()
+    for batch in tqdm(train_loader, desc=f'Epoch {epoch+1}'):
+        # data=[t.to(device) for t in batch]
+        # a,labels_input=data[:]
+        # input_ids=a.input_ids
+        # attention_mask=a.attention_mask
+        # optimizer.zero_grad()
+        # outputs = model(input_ids=input_ids, attention_mask=attention_mask,labels=labels_input)
+        
+        inputs, labels_input = batch
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        labels = labels_input.to(device)
+        optimizer.zero_grad()
 
-            total_loss_train += loss.item()
-            total_correct_train += (outputs.argmax(1) == labels_input).sum().item()
+        outputs = model(**inputs)
+        logits = outputs.logits
 
-        train_loss = total_loss_train / len(train_loader)
-        train_acc = total_correct_train / len(train_loader.dataset)
+        # Reshape logits and labels to [batch_size * max_seq_length, num_labels]
+        logits = logits.view(-1, model.config.num_labels)
+        labels =labels.view(-1)
 
-        val_loss, val_acc, val_precision, val_recall, val_f1 = evaluate(model, val_loader, criterion)
+        # Compute the loss
+        loss = loss_fn(logits, labels)
+        loss.backward()
+        optimizer.step()
 
-        print(f"Epoch [{epoch+1}/{epochs}] - "
-              f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f} - "
-              f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f} - "
-              f"Val Precision: {val_precision:.4f}, Val Recall: {val_recall:.4f}, Val F1: {val_f1:.4f}")
-        # 保存最佳模型
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save(model.state_dict(), save_path)
-            print("Best model saved!")
+        total_loss += loss.item()
 
-def evaluate(model, data_loader, criterion):
+    average_loss = total_loss / len(train_loader)
+    print(f'Epoch {epoch+1}, Loss: {average_loss:.4f}')
+
+    # Validation loop
     model.eval()
-    total_loss = 0
-    total_correct = 0
-    all_preds = []
-    all_labels = []
+    val_true_labels = []
+    val_pred_labels = []
 
     with torch.no_grad():
-        for batch in data_loader:
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            labels = batch["labels_input"].to(device)
+        for batch in tqdm(val_loader, desc=f'Validation Epoch {epoch+1}'):
+            inputs, labels_input = batch
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+            labels = labels_input.to(device)
 
-            outputs = model(input_ids, attention_mask)
-            loss = criterion(outputs, labels)
-            total_loss += loss.item()
-            total_correct += (outputs.argmax(1) == labels).sum().item()
+            # data=[t.to(device) for t in batch]
+            # a,labels_input=data[:]
+            # input_ids=a.input_ids
+            # attention_mask=a.attention_mask
             
-    all_preds.extend(outputs.argmax(1).cpu().numpy().tolist())
-    all_labels.extend(labels.cpu().numpy().tolist())
+            # outputs = model(input_ids=input_ids, attention_mask=attention_mask,labels=labels_input)
+            outputs = model(**inputs)
+            logits = outputs.logits
 
-    avg_loss = total_loss / len(data_loader)
-    avg_acc = total_correct / len(data_loader.dataset)
+            # Reshape logits and labels to [batch_size * max_seq_length, num_labels]
+            logits = logits.view(-1, model.config.num_labels)
+            labels = labels.view(-1)
 
-    precision = precision_score(all_labels, all_preds, average='weighted')
-    recall = recall_score(all_labels, all_preds, average='weighted')
-    f1 = f1_score(all_labels, all_preds, average='weighted')
+            _, predicted_labels = torch.max(logits, 1)
 
-    return avg_loss, avg_acc, precision, recall, f1
+            val_true_labels.extend(labels.cpu().numpy())
+            val_pred_labels.extend(predicted_labels.cpu().numpy())
 
-best_model_path = "best_model.pth"
-train(model, train_loader, val_loader, EPOCHS, criterion, optimizer,best_model_path)
+    # Calculate evaluation metrics
+    precision = precision_score(val_true_labels, val_pred_labels, average='macro')
+    recall = recall_score(val_true_labels, val_pred_labels, average='macro')
+    f1 = f1_score(val_true_labels, val_pred_labels, average='macro')
+
+    print(f'Validation Precision: {precision:.4f}, Recall: {recall:.4f}, F1-score: {f1:.4f}')
+
 
 
