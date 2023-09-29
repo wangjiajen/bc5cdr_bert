@@ -2,13 +2,13 @@ import random
 import pandas as pd
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from transformers import BertModel,BertTokenizer,BertForTokenClassification,BertTokenizerFast
 from datasets import load_dataset
 from transformers import BertForTokenClassification, BertTokenizer, AdamW,AutoTokenizer,AutoModelForTokenClassification
 from torch.utils.data import Dataset, DataLoader
-import torch
-import torch.nn as nn
+
 from torch.optim import Adam
 from sklearn.metrics import precision_score, recall_score, f1_score
 from tqdm import tqdm
@@ -52,36 +52,27 @@ mapping = {
     3: "I-Disease",
     4: "I-Chemical"
 }
-# categories = {
 
-#     0: 0,
-#     1: 1,
-#     2: 2,
-#     3: 3,
-#     4: 4,
-
-# # 0:'O',
-# # 1:'B-Chemical',
-# # 2:'B-Disease',
-# # 3:'I-Disease',
-# # 4:'I-Chemical',
-# }
 def coffate_fn(examples):
     texts, all_labels = [], []
     for text, labels in examples:
         texts.append(text)
         all_labels.append(labels)
+
     tokenized_inputs = tokenizer(texts,
                                  truncation=True,
                                  padding=True,
                                 
                                  is_split_into_words=True,
-                                 max_length=512,
+
+                                 max_length=128,
+
                                  return_tensors="pt")
     targets = []
     for i, labels in enumerate(all_labels):
         label_ids = []
         for word_idx in tokenized_inputs.word_ids(batch_index=i):
+
             
             if word_idx is None:
                 label_ids.append(-100)
@@ -91,6 +82,7 @@ def coffate_fn(examples):
         targets.append(label_ids)
     targets = torch.tensor(targets)
     return tokenized_inputs, targets
+
 # def align_labels_with_tokens(labels, word_ids):
 #     # print(f"labels: {labels}, word_ids: {word_ids}")
 #     new_labels = []
@@ -215,7 +207,7 @@ def coffate_fn(examples):
 # print(tokenized_example)
 
 # 定義參數
-LR = 5e-5
+
 EPOCHS = 5 #總共要用全部的訓練樣本重複跑幾回合
 BATCH_SIZE = 8
 
@@ -226,44 +218,43 @@ val_loader = DataLoader(val_dataset, batch_size = BATCH_SIZE, shuffle = True, co
 
 # Define the model, optimizer, and loss function
 model.to(device)
-optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
-loss_fn = nn.CrossEntropyLoss()
+optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
+loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
 model.train()
 # Training loop
 for epoch in range(EPOCHS):
     model.train()
     total_loss = 0.0
 
-    for batch in tqdm(train_loader, desc=f'Epoch {epoch+1}'):
-        # data=[t.to(device) for t in batch]
-        # a,labels_input=data[:]
-        # input_ids=a.input_ids
-        # attention_mask=a.attention_mask
-        # optimizer.zero_grad()
-        # outputs = model(input_ids=input_ids, attention_mask=attention_mask,labels=labels_input)
+    # 訓練數據的batch
+    for batch in tqdm(train_loader, desc=f'Training Epoch {epoch+1}'):
+
+        # 對batch中的每條tensor類型數據都執行.to(device)
+        # 因為模型和數據要在同一個設備上才能運行
         inputs, targets = [x.to(device) for x in batch]
-        # inputs, labels_input = batch
-        # inputs = {k: v.to(device) for k, v in inputs.items()}
-        # labels = labels_input.to(device)
+
+        # 確保模型輸出和目標形狀對齊
+        labels = targets.view(-1)
+
+        # 清除現有梯度
         optimizer.zero_grad()
+        outputs = model(**inputs,labels=labels)
+        logits = outputs.logits
 
-        outputs = model(**inputs,labels=targets)
-        # logits = outputs.logits
-
-        # Reshape logits and labels to [batch_size * max_seq_length, num_labels]
-        # logits = logits.view(-1, model.config.num_labels)
-        # labels =targets.view(-1)
-
-        # Compute the loss
-        loss = outputs.loss
+        # 計算損失
+        loss = loss_fn(logits.view(-1, 5), labels)
         loss.backward()
         optimizer.step()
-
-        # total_loss += loss.item()
+        # logits_shape= logits.size()
+        # print("模型输出 (logits) 的形状:", logits_shape)
         # print(f"inputs: {inputs}")
         # print(f"labels_input: {labels_input}")
+
+        # total_loss += loss.item()
+
     # average_loss = total_loss / len(train_loader)
     # print(f'Epoch {epoch+1}, Loss: {average_loss:.4f}')
+
 
     # Validation loop
     model.eval()
@@ -274,8 +265,11 @@ for epoch in range(EPOCHS):
         correct = 0
         total = 0
         for batch in tqdm(val_loader, desc=f'Validation Epoch {epoch+1}'):
+
             inputs, targets = [x.to(device) for x in batch]
             labels = targets.view(-1)
+
+
             # inputs, labels_input = batch
             # inputs = {k: v.to(device) for k, v in inputs.items()}
             # labels = labels_input.to(device)
@@ -286,6 +280,7 @@ for epoch in range(EPOCHS):
             # attention_mask=a.attention_mask
             
             # outputs = model(input_ids=input_ids, attention_mask=attention_mask,labels=labels_input)
+
             outputs = model(**inputs,labels=targets)
             # logits = outputs.logits
             predictions = torch.argmax(outputs.logits.view(-1, 5), dim=1)
@@ -313,8 +308,10 @@ for epoch in range(EPOCHS):
         # print(compute_metrics(all_predictions, all_labels),'~~~~'*50)
         new_all_predictions = [mapping[num] for num in val_pred_labels]
         new_all_labels = [mapping[num] for num in val_true_labels]
-        print(new_all_predictions,'new_all_predictions')
-        print(new_all_labels,'new_all_labels')
+        # print(new_all_predictions,'new_all_predictions')
+        # print(new_all_labels,'new_all_labels')
 
 
 print(classification_report([new_all_predictions], [new_all_labels]))
+
+
