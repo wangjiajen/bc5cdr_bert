@@ -226,6 +226,7 @@ for epoch in range(EPOCHS):
     model.train()
     total_loss = 0.0
 
+
     # 訓練數據的batch
     for batch in tqdm(train_loader, desc=f'Training Epoch {epoch+1}'):
 
