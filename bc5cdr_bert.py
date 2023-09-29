@@ -71,17 +71,21 @@ def coffate_fn(examples):
     for text, labels in examples:
         texts.append(text)
         all_labels.append(labels)
+
     tokenized_inputs = tokenizer(texts,
                                  truncation=True,
                                  padding=True,
                                 
                                  is_split_into_words=True,
-                                 max_length=512,
+
+                                 max_length=128,
+
                                  return_tensors="pt")
     targets = []
     for i, labels in enumerate(all_labels):
         label_ids = []
         for word_idx in tokenized_inputs.word_ids(batch_index=i):
+
             
             if word_idx is None:
                 label_ids.append(-100)
@@ -91,6 +95,7 @@ def coffate_fn(examples):
         targets.append(label_ids)
     targets = torch.tensor(targets)
     return tokenized_inputs, targets
+
 # def align_labels_with_tokens(labels, word_ids):
 #     # print(f"labels: {labels}, word_ids: {word_ids}")
 #     new_labels = []
@@ -241,7 +246,10 @@ for epoch in range(EPOCHS):
         # attention_mask=a.attention_mask
         # optimizer.zero_grad()
         # outputs = model(input_ids=input_ids, attention_mask=attention_mask,labels=labels_input)
+
         inputs, targets = [x.to(device) for x in batch]
+
+
         # inputs, labels_input = batch
         # inputs = {k: v.to(device) for k, v in inputs.items()}
         # labels = labels_input.to(device)
@@ -252,6 +260,7 @@ for epoch in range(EPOCHS):
 
         # Reshape logits and labels to [batch_size * max_seq_length, num_labels]
         # logits = logits.view(-1, model.config.num_labels)
+
         # labels =targets.view(-1)
 
         # Compute the loss
@@ -265,6 +274,7 @@ for epoch in range(EPOCHS):
     # average_loss = total_loss / len(train_loader)
     # print(f'Epoch {epoch+1}, Loss: {average_loss:.4f}')
 
+
     # Validation loop
     model.eval()
     val_true_labels = []
@@ -274,8 +284,11 @@ for epoch in range(EPOCHS):
         correct = 0
         total = 0
         for batch in tqdm(val_loader, desc=f'Validation Epoch {epoch+1}'):
+
             inputs, targets = [x.to(device) for x in batch]
             labels = targets.view(-1)
+
+
             # inputs, labels_input = batch
             # inputs = {k: v.to(device) for k, v in inputs.items()}
             # labels = labels_input.to(device)
@@ -286,6 +299,7 @@ for epoch in range(EPOCHS):
             # attention_mask=a.attention_mask
             
             # outputs = model(input_ids=input_ids, attention_mask=attention_mask,labels=labels_input)
+
             outputs = model(**inputs,labels=targets)
             # logits = outputs.logits
             predictions = torch.argmax(outputs.logits.view(-1, 5), dim=1)
@@ -318,3 +332,5 @@ for epoch in range(EPOCHS):
 
 
 print(classification_report([new_all_predictions], [new_all_labels]))
+
+
