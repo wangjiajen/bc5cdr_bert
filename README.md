@@ -33,6 +33,24 @@ test_data = dataset["test"]
 ```
 ## 訓練過程
 
+<br>代碼概述
+- `bc5cdr_bert.py`：主要的訓練程式碼，包含加載數據、定義模型架構、訓練模型以及在驗證集和測試集上評估模型的代碼。
+
+- `CustomDataset`：用於創建自定義的PyTorch數據集，用於加載BC5CDR數據。
+
+- `coffate_fn`：此函數用作DataLoader的聚合函數。它對輸入文本進行標記並處理訓練標籤。
+
+- `mapping`：此字典將數值標籤映射到其對應的NER標籤。
+```sh
+mapping = {
+    0: 'O',
+    1: "B-Chemical",
+    2: "B-Disease",
+    3: "I-Disease",
+    4: "I-Chemical"
+}
+```
+
 <br>在訓練之前，超參數的調整能獲得更好的模型。例如：
 - `LR`：學習率 (Learning Rate)。
 - `EPOCHS`：影響的就是迭代計算的次數。
