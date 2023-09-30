@@ -8,8 +8,6 @@ torch = "*"
 pandas = "*"
 transformers = "*"
 datasets = "*"
-scikit-learn = "*"
-accelerate = "*"
 seqeval = "*"
 
 [dev-packages]
