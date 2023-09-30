@@ -45,7 +45,7 @@ test_data = dataset["test"]
 
 * `分類報告 (Classification Report)`: 包括了每個類別的準確率、召回率和 F1 分數等評估指標。可以使用 classification_report 函數來生成。
 
-### 結果<br>
+## 結果<br>
 
 
 |                   |Train   |Test    |
@@ -54,5 +54,11 @@ test_data = dataset["test"]
 |Precision          |0.89    |0.89    |
 |Recall             |0.89    |0.87    |
 |F1-score           |0.89    |0.88    |
+
+## 參考資料<br>
+
+<br>[1]:https://huggingface.co/datasets/tner/bc5cdr?fbclid=IwAR06QVaGqi1IvVCjYKudvo2Agae_xsDRmdgFIkDktQUUePIJiIX5oBKyujs<br>
+[2]:https://huggingface.co/docs/transformers/tasks/token_classification<br>
+[3]:https://blog.csdn.net/jclian91/article/details/104785226<br>
 
 
