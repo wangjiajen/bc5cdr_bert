@@ -10,7 +10,6 @@
 * Transformers library (Hugging Face)
 * Pandas
 * NumPy
-* Scikit-learn
 * tqdm
 * seqeval
 
