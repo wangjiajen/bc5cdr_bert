@@ -7,11 +7,9 @@ from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
 from transformers import AutoTokenizer,AutoModelForTokenClassification
 from torch.utils.data import Dataset, DataLoader
-from sklearn.metrics import precision_score, recall_score, f1_score
 from tqdm import tqdm
-from seqeval.metrics import accuracy_score
-from seqeval.metrics import classification_report
-from seqeval.metrics import f1_score
+from seqeval.metrics import accuracy_score,classification_report
+
 
 # 檢查是否有可用的GPU，如果有就使用GPU，否則使用CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -35,7 +33,6 @@ val_data = dataset["validation"]
 # print(df)
 # print(dataset)
 
-# Dataset
 class CustomDataset(Dataset):
     def __init__(self, data, tokenizer):
         self.data = data
@@ -102,13 +99,13 @@ val_loader = DataLoader(val_dataset, batch_size = BATCH_SIZE, shuffle = True, co
 # Define the model, optimizer, and loss function
 model.to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
-loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+criterion = nn.CrossEntropyLoss(ignore_index=-100)
 model.train()
 
 # Training loop
 for epoch in range(EPOCHS):
     model.train()
-    total_loss = 0.0
+    total_loss_train = 0.0
 
 
     # 訓練數據的batch
@@ -127,7 +124,7 @@ for epoch in range(EPOCHS):
         logits = outputs.logits
 
         # 計算損失
-        loss = loss_fn(logits.view(-1, 5), labels)
+        loss = criterion(logits.view(-1, 5), labels)
         loss.backward()
         optimizer.step()
         # logits_shape= logits.size()
@@ -135,16 +132,16 @@ for epoch in range(EPOCHS):
         # print(f"inputs: {inputs}")
         # print(f"labels_input: {labels_input}")
 
-        # total_loss += loss.item()
+        # total_loss_train += loss.item()
 
-    # average_loss = total_loss / len(train_loader)
+    # average_loss = total_loss_train / len(train_loader)
     # print(f'Epoch {epoch+1}, Loss: {average_loss:.4f}')
-
+    model.save_pretrained('./saved_models')
 
     # Validation loop
     model.eval()
-    val_true_labels = []
-    val_pred_labels = []
+    all_labels = []
+    all_preds = []
     with torch.no_grad():
         correct = 0
         total = 0
@@ -156,15 +153,17 @@ for epoch in range(EPOCHS):
             new_labels, new_predictions = zip(*[(label, prediction) for label, prediction in zip(labels, predictions) if label != -100])
             total += labels.size(0)
             correct += (predictions == labels).sum().item()
-            val_pred_labels.extend(torch.tensor(new_predictions).cpu().numpy())
-            val_true_labels.extend(torch.tensor(new_labels).cpu().numpy())
+            all_preds.extend(torch.tensor(new_predictions).cpu().numpy())
+            all_labels.extend(torch.tensor(new_labels).cpu().numpy())
 
-        new_all_predictions = [mapping[num] for num in val_pred_labels]
-        new_all_labels = [mapping[num] for num in val_true_labels]
+        all_preds_map = [mapping[num] for num in all_preds]
+        all_labels_map = [mapping[num] for num in all_labels]
 
-print(accuracy_score([new_all_predictions], [new_all_labels]))
-print(classification_report([new_all_predictions], [new_all_labels]))
+print(accuracy_score([all_preds_map], [all_labels_map]))
+print(classification_report([all_preds_map], [all_labels_map]))
 
+model = AutoModelForTokenClassification.from_pretrained('./saved_models')
+model.to(device)
 test_data = dataset["test"]
 test_dataset = CustomDataset(test_data, tokenizer)
 test_loader = DataLoader(test_dataset, batch_size=1, shuffle=True, collate_fn=coffate_fn)
@@ -191,6 +190,9 @@ new_test_labels = [mapping[num] for num in test_true_labels]
 # Print classification report for test set
 print(accuracy_score([new_test_predictions], [new_test_labels]))
 print(classification_report([new_test_predictions], [new_test_labels]))
+
+
+
 
 
 
