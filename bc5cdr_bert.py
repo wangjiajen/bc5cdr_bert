@@ -11,7 +11,7 @@ from tqdm import tqdm
 from seqeval.metrics import accuracy_score,classification_report
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
-import numpy as np
+import seaborn as sns
 
 
 # 檢查是否有可用的GPU，如果有就使用GPU，否則使用CPU
@@ -32,9 +32,10 @@ model = AutoModelForTokenClassification.from_pretrained('distilbert-base-uncased
 dataset = load_dataset("tner/bc5cdr")
 train_data = dataset["train"]
 val_data = dataset["validation"]
-# df = pd.DataFrame(val_data)
+df = pd.DataFrame(val_data)
 # print(df)
 # print(dataset)
+
 
 class CustomDataset(Dataset):
     def __init__(self, data, tokenizer):
@@ -174,6 +175,7 @@ test_loader = DataLoader(test_dataset, batch_size=1, shuffle=True, collate_fn=co
 # Test loop
 test_true_labels = []
 test_pred_labels = []
+wrong_predictions = []
 with torch.no_grad():
     for batch in tqdm(test_loader, desc=f'Testing'):
         inputs, targets = [x.to(device) for x in batch]
@@ -186,6 +188,9 @@ with torch.no_grad():
         test_pred_labels.extend(torch.tensor(new_predictions).cpu().numpy())
         test_true_labels.extend(torch.tensor(new_labels).cpu().numpy())
 
+        if list(new_labels) != list(new_predictions):
+            wrong_predictions.append((new_labels, new_predictions))
+
 # Convert predictions and labels to original labels
 new_test_predictions = [mapping[num] for num in test_pred_labels]
 new_test_labels = [mapping[num] for num in test_true_labels]
@@ -196,8 +201,13 @@ print(classification_report([new_test_predictions], [new_test_labels]))
 print("Confusion Matrix:")
 print(confusion_mat)
 
-# , labels=list(mapping.values())
-
-
+# 繪製混淆矩陣
+plt.figure(figsize=(12, 12))
+sns.heatmap(confusion_mat, annot=True, cmap="Blues",cbar_kws={"orientation":"horizontal"}, fmt="d",xticklabels=["O", "B-Chemical", "I-Chemical", "B-Disease","I-Disease"],yticklabels=["O", "B-Chemical", "I-Chemical", "B-Disease","I-Disease"],annot_kws={"size": 16})
+# Print classification report for test set
+plt.xlabel("Predicted Labels")
+plt.ylabel("True Labels")
+plt.title("Confusion Matrix")
+plt.savefig("confusion_matrix.png")  # 保存成圖片
 
 
