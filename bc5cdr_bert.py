@@ -9,6 +9,9 @@ from transformers import AutoTokenizer,AutoModelForTokenClassification
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from seqeval.metrics import accuracy_score,classification_report
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 # 檢查是否有可用的GPU，如果有就使用GPU，否則使用CPU
@@ -186,12 +189,14 @@ with torch.no_grad():
 # Convert predictions and labels to original labels
 new_test_predictions = [mapping[num] for num in test_pred_labels]
 new_test_labels = [mapping[num] for num in test_true_labels]
-
+confusion_mat = confusion_matrix(new_test_labels, new_test_predictions,labels=["O", "B-Chemical", "I-Chemical", "B-Disease","I-Disease"])
 # Print classification report for test set
 print(accuracy_score([new_test_predictions], [new_test_labels]))
 print(classification_report([new_test_predictions], [new_test_labels]))
+print("Confusion Matrix:")
+print(confusion_mat)
 
-
+# , labels=list(mapping.values())
 
 
 
